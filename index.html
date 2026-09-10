@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>v5.1 | JCECD Address Verification</title><link rel="manifest" href="manifest.webmanifest">
+<style>
+:root{font-family:Arial,Helvetica,sans-serif;color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#07111f;color:#f4f7fb;min-height:100vh}.wrap{max-width:900px;margin:auto;padding:18px}.head{background:#0d1c30;border:1px solid #243b59;border-radius:16px;padding:18px;margin-bottom:14px}.head h1{margin:0 0 6px;font-size:clamp(23px,5vw,36px)}.sub{color:#b8c6d9}.search{width:100%;font-size:20px;padding:16px;border-radius:12px;border:2px solid #496b94;background:#fff;color:#111;outline:none}.search:focus{border-color:#8dc1ff}.hint{font-size:13px;color:#aebed2;margin:8px 2px 0}.status{margin:12px 0;color:#bcd0e7}.results{display:grid;gap:10px}.item{width:100%;text-align:left;border:1px solid #2b4668;border-radius:12px;background:#10233b;color:#fff;padding:14px;cursor:pointer}.item:hover{background:#15304f}.item b{font-size:18px}.item small{display:block;color:#b8c7da;margin-top:4px}.card{margin-top:16px;border:2px solid #3b638f;border-radius:16px;background:#0d1c30;overflow:hidden}.row{padding:15px 18px;border-bottom:1px solid #243b59}.row:last-child{border-bottom:0}.label{font-size:12px;font-weight:700;color:#9fb4cc;letter-spacing:.06em;margin-bottom:4px}.value{font-size:22px;font-weight:700;word-break:break-word}.address .value{font-size:26px}.warn{color:#ffd66b}.nearby{font-size:18px;line-height:1.45}.hidden{display:none}.clear{margin-top:12px;padding:12px 16px;font-size:16px;font-weight:700;border-radius:10px;border:0;cursor:pointer}@media(max-width:600px){.wrap{padding:10px}.head{padding:14px}.row{padding:13px 14px}.value{font-size:19px}.address .value{font-size:22px}}
+</style></head><body><main class="wrap">
+<section class="head"><h1>JCECD Address Verification</h1><div class="sub">Emergency / Downtime Address Lookup · Address-Specific Nearby Fire Reference • v5.1</div></section>
+<input id="q" class="search" autocomplete="off" placeholder="Enter address, city, or ZIP" autofocus>
+<div class="hint">Example: 1703 TWELVE OAKS DR</div><div id="status" class="status">Loading address database...</div>
+<div id="results" class="results"></div>
+<section id="card" class="card hidden">
+ <div class="row address"><div class="label">VERIFIED ADDRESS</div><div id="addr" class="value"></div><div id="cityzip" class="sub"></div></div>
+ <div class="row"><div class="label">NEAREST CROSS STREETS</div><div id="cross" class="value"></div></div>
+ <div class="row"><div class="label">FIRE DEPARTMENT</div><div id="dept" class="value"></div></div>
+ <div class="row"><div class="label">FIRE RESPONSE QUAD</div><div id="resp" class="value"></div></div>
+ <div class="row"><div class="label">LAW BEAT</div><div id="beat" class="value"></div></div>
+ <div class="row"><div class="label">ADJOINING FIRE JURISDICTIONS</div><div id="nearby" class="value nearby"></div><div class="hint">Only outside fire jurisdictions that touch this fire response quad and are geographically within 3 miles of this verified address are listed. Ordered closest to farthest from the address. Geographic reference only. Verify current mutual/automatic-aid procedures before dispatch.</div></div>
+</section>
+<button id="clear" class="clear hidden">CLEAR / NEW SEARCH</button>
+</main><script>
+let rows=[]; const $=id=>document.getElementById(id);
+const norm=s=>(s||'').toUpperCase().replace(/[^A-Z0-9 ]+/g,' ').replace(/\s+/g,' ').trim();
+function isWarn(v){return /VERIFY|NO .*MATCH/i.test(v||'')}
+async function load(){try{
+ const files=['v51-data-01.tsv','v51-data-02.tsv','v51-data-03.tsv','v51-data-04.tsv','v51-data-05.tsv'];
+ const texts=await Promise.all(files.map(f=>fetch(f,{cache:'no-store'}).then(r=>{if(!r.ok)throw Error(f+' '+r.status);return r.text()})));
+ rows=texts.join('\n').split(/\r?\n/).filter(Boolean).map(line=>{const [address,city,zip,cross,dept,response,beat,adjoining]=line.split('\t');return{address,city,zip,cross,dept,response,beat,adjoining,key:norm([address,city,zip].join(' '))}});
+ $('status').textContent=`${rows.length.toLocaleString()} address records ready.`;
+}catch(e){console.error(e);$('status').textContent='Address database failed to load. Refresh the page.'}}
+function search(){const raw=$('q').value, q=norm(raw); $('results').innerHTML=''; $('card').classList.add('hidden'); $('clear').classList.add('hidden'); if(q.length<3){return;} const toks=q.split(' '); let m=[]; for(const r of rows){let ok=true; for(const t of toks){if(!r.key.includes(t)){ok=false;break}} if(ok){m.push(r); if(m.length>=30)break}}
+ if(!m.length){$('status').textContent='No matching address found.';return;} $('status').textContent=`${m.length}${m.length===30?'+' : ''} match${m.length===1?'':'es'}. Select an address.`; for(const r of m){const b=document.createElement('button');b.className='item';b.innerHTML=`<b>${esc(r.address)}</b><small>${esc([r.city,r.zip].filter(Boolean).join(' · '))}</small>`;b.onclick=()=>show(r);$('results').appendChild(b)}}
+function esc(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function set(id,v){const e=$(id);e.textContent=v||'NOT AVAILABLE';e.classList.toggle('warn',isWarn(v))}
+function show(r){$('results').innerHTML='';$('status').textContent='Address selected.';set('addr',r.address);$('cityzip').textContent=[r.city,r.zip].filter(Boolean).join('  ');set('cross',r.cross);set('dept',r.dept);set('resp',r.response);set('beat',r.beat);set('nearby',r.adjoining);$('card').classList.remove('hidden');$('clear').classList.remove('hidden');window.scrollTo({top:0,behavior:'smooth'})}
+$('q').addEventListener('input',search); $('q').addEventListener('keydown',e=>{if(e.key==='Enter'){const b=$('results').querySelector('.item');if(b)b.click()}}); $('clear').onclick=()=>{$('q').value='';$('results').innerHTML='';$('card').classList.add('hidden');$('clear').classList.add('hidden');$('status').textContent=`${rows.length.toLocaleString()} address records ready.`;$('q').focus()};
+load(); if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw-v51.js').catch(()=>{}));
+</script></body></html>
